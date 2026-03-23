@@ -1,6 +1,6 @@
 # pi-stash
 
-A [pi](https://github.com/badlogic/pi-mono) extension that temporarily stashes the current editor draft with a keyboard shortcut.
+A [pi](https://github.com/badlogic/pi-mono) extension that temporarily stashes the current editor draft with a keyboard shortcut. Inspired by Claude Code.
 
 ## Install
 
@@ -16,7 +16,7 @@ pi install git:github.com/maxpetretta/pi-stash
 
 ## Usage
 
-Press `Ctrl+S` while typing a prompt to stash the current editor contents into:
+Press `Alt+S` while typing a prompt to stash the current editor contents into:
 
 ```text
 .pi/stash.md
@@ -29,19 +29,34 @@ When you do that, `pi-stash`:
 3. waits for your next prompt submission
 4. automatically restores the stashed draft into the editor right after that prompt is sent
 
-If the editor is empty, pressing `Ctrl+S` again will immediately restore the pending stashed prompt instead.
+If the editor is empty, pressing `Alt+S` again will immediately restore the pending stashed prompt instead.
 
 This is useful when you want to quickly shelve one prompt, send another one first, and then continue where you left off.
 
-## Notes
+### Configuring the shortcut
 
-On some terminals, `Ctrl+S` is captured by XON/XOFF flow control and freezes terminal output. If that happens, run:
+`pi-stash` reads its shortcut from `~/.pi/agent/keybindings.json` at startup. If `pi-stash.shortcut` is not set, it defaults to `Alt+S`.
 
-```bash
-stty -ixon
+Note: `pi-stash.shortcut` is a custom extension-owned key that `pi-stash` reads itself at startup. It is not a built-in pi action id.
+
+Example:
+
+```json
+{
+  "pi-stash.shortcut": ["ctrl+s"],
+  "app.session.toggleSort": ["alt+s"]
+}
 ```
 
-Then restart your shell or terminal session if needed.
+You can also use a single string instead of an array:
+
+```json
+{
+  "pi-stash.shortcut": "ctrl+s"
+}
+```
+
+If you remap `pi-stash` to `Ctrl+S`, also rebind pi's built-in session sort toggle off of `Ctrl+S` to avoid the shortcut conflict warning. After editing `keybindings.json`, run `/reload` in pi.
 
 ## Development
 

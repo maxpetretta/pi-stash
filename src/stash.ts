@@ -1,18 +1,21 @@
+import { readFileSync } from "node:fs"
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent"
 
 export const STASH_FILE = path.join(".pi", "stash.md")
+export const DEFAULT_SHORTCUT = "alt+s"
+export const SHORTCUT_KEYBINDING_ID = "pi-stash.shortcut"
 
 export function getPendingStashPath(cwd: string): string {
   return path.join(cwd, STASH_FILE)
 }
 
-export async function savePendingStash(cwd: string, text: string): Promise<string> {
+export async function savePendingStash(cwd: string, text: string): Promise<void> {
   const stashPath = getPendingStashPath(cwd)
   await mkdir(path.dirname(stashPath), { recursive: true })
   await writeFile(stashPath, text, "utf8")
-  return stashPath
 }
 
 export async function popPendingStash(cwd: string): Promise<string | null> {
@@ -38,8 +41,45 @@ type ShortcutContext = {
   }
 }
 
+type ShortcutKey = Parameters<ExtensionAPI["registerShortcut"]>[0]
+
 function getCwd(cwd?: string): string {
   return cwd || process.cwd()
+}
+
+function getKeybindingsPath(): string {
+  return path.join(process.env.HOME ?? os.homedir(), ".pi", "agent", "keybindings.json")
+}
+
+function normalizeShortcut(value: unknown): ShortcutKey | null {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    return normalized.length > 0 ? (normalized as ShortcutKey) : null
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const normalized = normalizeShortcut(entry)
+      if (normalized !== null) {
+        return normalized
+      }
+    }
+  }
+
+  return null
+}
+
+export function readShortcutFromKeybindings(keybindingsPath = getKeybindingsPath()): ShortcutKey | null {
+  try {
+    const parsed = JSON.parse(readFileSync(keybindingsPath, "utf8")) as Record<string, unknown>
+    return normalizeShortcut(parsed[SHORTCUT_KEYBINDING_ID])
+  } catch {
+    return null
+  }
+}
+
+export function resolveShortcut(keybindingsPath = getKeybindingsPath()): ShortcutKey {
+  return readShortcutFromKeybindings(keybindingsPath) ?? DEFAULT_SHORTCUT
 }
 
 export default function stashExtension(pi: ExtensionAPI) {
@@ -50,16 +90,16 @@ export default function stashExtension(pi: ExtensionAPI) {
 
     if (stashedPrompt === null) {
       if (notifyOnMissing) {
-        ctx.ui.notify("The editor is empty and there is no pending stash to restore.", "warning")
+        ctx.ui.notify("Both the editor and stash are empty", "warning")
       }
       return
     }
 
     ctx.ui.setEditorText(stashedPrompt)
-    ctx.ui.notify("Restored stashed prompt to the editor.", "info")
+    ctx.ui.notify("Restored stashed prompt to the editor", "info")
   }
 
-  pi.registerShortcut("ctrl+s", {
+  pi.registerShortcut(resolveShortcut(), {
     description: "Stash the current prompt, or restore a pending stash when the editor is empty",
     handler: async (ctx) => {
       const cwd = getCwd(ctx.cwd)
@@ -71,13 +111,10 @@ export default function stashExtension(pi: ExtensionAPI) {
         return
       }
 
-      const stashPath = await savePendingStash(cwd, editorText)
+      await savePendingStash(cwd, editorText)
       armed = false
       ctx.ui.setEditorText("")
-      ctx.ui.notify(
-        `Stashed current prompt to ${path.relative(cwd, stashPath)}. It will return after the next prompt is sent.`,
-        "info",
-      )
+      ctx.ui.notify("Stashed prompt (auto-restores after submit)", "info")
     },
   })
 
